@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 class="page-title">Threat Report Generator</h1>
+<p class="page-sub">Create a PDF report from the breach, dark web simulation, and risk scoring modules.</p>
+
+<section class="report-panel">
+  <div>
+    <h3>Generate Report</h3>
+    <p class="muted">Enter an email address to run the full assessment pipeline and build a downloadable PDF.</p>
+  </div>
+  <div class="report-form">
+    <input type="email" id="reportEmail" class="search-input" placeholder="name@example.com">
+    <button class="primary-btn" onclick="generateReport()">Generate PDF</button>
+  </div>
+  <div id="reportStatus" class="report-status" aria-live="polite"></div>
+</section>
+
+<section id="reportResult" class="report-result" style="display:none;">
+  <div class="result-card">
+    <span class="label">Risk Level</span>
+    <strong id="riskLabel">-</strong>
+  </div>
+  <div class="result-card">
+    <span class="label">Score</span>
+    <strong id="riskScore">-</strong>
+  </div>
+  <div class="result-card">
+    <span class="label">Alert</span>
+    <strong id="alertStatus">-</strong>
+  </div>
+  <a id="downloadReport" class="download-link" href="#" target="_blank" rel="noopener">Open PDF Report</a>
+</section>
+
+<style>
+.page-sub { color:#8b949e; margin-bottom:24px; }
+.report-panel, .report-result {
+  background:#161b22;
+  border:1px solid #30363d;
+  border-radius:10px;
+  padding:24px;
+  margin-bottom:22px;
+}
+.report-panel h3 { margin-bottom:8px; color:#e6edf3; }
+.muted { color:#8b949e; font-size:0.92rem; line-height:1.6; }
+.report-form {
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-top:18px;
+}
+.primary-btn {
+  padding:12px 24px;
+  background:#58a6ff;
+  color:#07111f;
+  border:0;
+  border-radius:8px;
+  font-weight:700;
+  cursor:pointer;
+}
+.primary-btn:disabled { opacity:0.65; cursor:wait; }
+.report-status { margin-top:14px; color:#e3b341; min-height:22px; }
+.report-result {
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+  gap:14px;
+  align-items:stretch;
+}
+.result-card {
+  background:#0d1117;
+  border:1px solid #30363d;
+  border-radius:8px;
+  padding:16px;
+}
+.label {
+  display:block;
+  color:#8b949e;
+  font-size:0.8rem;
+  margin-bottom:8px;
+}
+.result-card strong { color:#e6edf3; font-size:1.2rem; }
+.download-link {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:70px;
+  border-radius:8px;
+  background:#238636;
+  color:#fff;
+  text-decoration:none;
+  font-weight:700;
+}
+</style>
+
+<script>
+function setReportStatus(message, isError) {
+  const el = document.getElementById('reportStatus');
+  el.textContent = message;
+  el.style.color = isError ? '#ff7b72' : '#e3b341';
+}
+
+function generateReport() {
+  const email = document.getElementById('reportEmail').value.trim();
+  const button = document.querySelector('.primary-btn');
+  const result = document.getElementById('reportResult');
+
+  if (!email || !email.includes('@')) {
+    setReportStatus('Enter a valid email address.', true);
+    return;
+  }
+
+  button.disabled = true;
+  result.style.display = 'none';
+  setReportStatus('Generating report...', false);
+
+  fetch('/api/report/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email })
+  })
+  .then(async response => {
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Report generation failed.');
+    }
+    return data;
+  })
+  .then(data => {
+    document.getElementById('riskLabel').textContent = data.risk_label || '-';
+    document.getElementById('riskScore').textContent = data.score ?? '-';
+    document.getElementById('alertStatus').textContent = (data.alert && data.alert.status) || '-';
+    document.getElementById('downloadReport').href = data.pdf_url;
+    result.style.display = 'grid';
+    setReportStatus('Report generated successfully.', false);
+  })
+  .catch(error => setReportStatus(error.message, true))
+  .finally(() => { button.disabled = false; });
+}
+</script>
+
+{% endblock %}

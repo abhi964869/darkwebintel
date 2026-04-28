@@ -1,0 +1,9 @@
+source,breach_date,data_type,affected_count,severity,sample_emails
+LinkedIn Simulation,2021-06-22,emails;passwords;phone,700000000,High,user1@gmail.com;user2@yahoo.com
+Adobe Simulation,2019-10-03,emails;encrypted_passwords,153000000,Medium,admin@adobe.com;test@hotmail.com
+RockYou2021 Simulation,2021-06-04,emails;plaintext_passwords,8400000000,Critical,victim@gmail.com;exposed@outlook.com
+Facebook Simulation,2021-04-03,phone;email;name,533000000,High,fb_user@gmail.com;contact@fb.com
+Canva Simulation,2019-05-24,emails;usernames,137000000,Medium,design@canva.com;art@gmail.com
+Wattpad Simulation,2020-06-29,emails;passwords;usernames,270000000,High,reader@wattpad.com;writer@gmail.com
+Wishbone Simulation,2020-05-14,emails;phone;passwords,40000000,Medium,user@wishbone.com;shop@yahoo.com
+Mathway Simulation,2020-05-05,emails;passwords,25000000,Low,student@edu.com;math@gmail.com

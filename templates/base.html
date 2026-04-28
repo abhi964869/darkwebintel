@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dark Web Threat Intelligence</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  {% set prefix = '/flask' if request.path.startswith('/flask') else '' %}
+  <div class="mesh-bg"></div>
+  <div class="grid-glow"></div>
+
+  <nav class="navbar">
+    <a class="nav-brand" href="{{ prefix or '/' }}">
+      <span class="brand-mark">D</span>
+      <span>
+        <strong>Dark Intel</strong>
+        <small>Flask command surface</small>
+      </span>
+    </a>
+    <div class="nav-links">
+      <a href="{{ prefix or '/' }}" class="{% if request.path in ['/', '/flask'] %}active{% endif %}">Dashboard</a>
+      <a href="{{ prefix }}/search" class="{% if request.path.endswith('/search') %}active{% endif %}">Search</a>
+      <a href="{{ prefix }}/darkweb" class="{% if request.path.endswith('/darkweb') %}active{% endif %}">Dark Web</a>
+      <a href="{{ prefix }}/assess" class="{% if request.path.endswith('/assess') %}active{% endif %}">Assess</a>
+      <a href="{{ prefix }}/report" class="{% if request.path.endswith('/report') %}active{% endif %}">Reports</a>
+    </div>
+    <a class="react-link" href="/">React UI</a>
+  </nav>
+
+  <header class="hero-shell">
+    <div class="status-pill">
+      <span class="status-dot"></span>
+      Local Flask API online
+    </div>
+    <h1>Operational intelligence with animated Flask views.</h1>
+    <p>Use the server-rendered dashboard, breach monitor, dark web simulation, risk engine, and report generator from the same localhost:3000 flow.</p>
+  </header>
+
+  <main class="container page-enter">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    Academic OSINT simulation. No live dark web access is performed.
+  </footer>
+</body>
+</html>

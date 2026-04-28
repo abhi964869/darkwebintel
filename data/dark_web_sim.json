@@ -1,0 +1,118 @@
+{
+  "metadata": {
+    "description": "Simulated Dark Web Threat Intelligence Dataset",
+    "purpose": "Academic BCA Final Year Project — ethical simulation only",
+    "sources_simulated": [
+      "paste sites (pastebin-style)",
+      "dark web forum leak threads",
+      "credential dump repositories",
+      "onion site mirrors"
+    ],
+    "generated_at": "2025-01-01"
+  },
+  "leaked_credentials": [
+    {
+      "sim_source": "darkpaste.onion [SIMULATED]",
+      "leak_type": "Credential Dump",
+      "post_title": "Fresh LinkedIn Combo List 2021",
+      "emails": ["user1@gmail.com", "user2@yahoo.com", "admin@corp.com"],
+      "data_exposed": ["email", "password_hash", "phone"],
+      "threat_level": "High",
+      "date_posted": "2021-07-01",
+      "verified": true
+    },
+    {
+      "sim_source": "leakforum.onion [SIMULATED]",
+      "leak_type": "Database Dump",
+      "post_title": "RockYou2021 Mega Compilation",
+      "emails": ["victim@gmail.com", "exposed@outlook.com", "test@edu.com"],
+      "data_exposed": ["email", "plaintext_password", "username"],
+      "threat_level": "Critical",
+      "date_posted": "2021-06-15",
+      "verified": true
+    },
+    {
+      "sim_source": "anonpaste.onion [SIMULATED]",
+      "leak_type": "Paste Dump",
+      "post_title": "Facebook Data Scrape April 2021",
+      "emails": ["fb_user@gmail.com", "contact@fb.com", "social@yahoo.com"],
+      "data_exposed": ["email", "phone", "full_name", "location"],
+      "threat_level": "High",
+      "date_posted": "2021-04-10",
+      "verified": false
+    },
+    {
+      "sim_source": "breachdb.onion [SIMULATED]",
+      "leak_type": "Combo List",
+      "post_title": "Adobe Creative Cloud Breach Archive",
+      "emails": ["admin@adobe.com", "test@hotmail.com", "creative@gmail.com"],
+      "data_exposed": ["email", "encrypted_password", "subscription_type"],
+      "threat_level": "Medium",
+      "date_posted": "2019-11-01",
+      "verified": true
+    },
+    {
+      "sim_source": "shadowforum.onion [SIMULATED]",
+      "leak_type": "Forum Post",
+      "post_title": "Canva User Database Free Download",
+      "emails": ["design@canva.com", "art@gmail.com", "creative@outlook.com"],
+      "data_exposed": ["email", "username", "country"],
+      "threat_level": "Medium",
+      "date_posted": "2019-06-01",
+      "verified": false
+    },
+    {
+      "sim_source": "darkdump.onion [SIMULATED]",
+      "leak_type": "Credential Dump",
+      "post_title": "Wattpad 270M User Records",
+      "emails": ["reader@wattpad.com", "writer@gmail.com", "story@yahoo.com"],
+      "data_exposed": ["email", "password", "username", "birthdate"],
+      "threat_level": "High",
+      "date_posted": "2020-07-14",
+      "verified": true
+    }
+  ],
+  "threat_actors": [
+    {
+      "alias": "ShadowBroker_X [SIMULATED]",
+      "type": "Data Broker",
+      "activity": "Sells credential dumps on dark web forums",
+      "known_since": "2020",
+      "threat_level": "High"
+    },
+    {
+      "alias": "LeakMaster99 [SIMULATED]",
+      "type": "Script Kiddie",
+      "activity": "Reposts public breaches on paste sites",
+      "known_since": "2021",
+      "threat_level": "Medium"
+    },
+    {
+      "alias": "PhantomDumper [SIMULATED]",
+      "type": "Advanced Persistent Threat",
+      "activity": "Targeted corporate database extraction",
+      "known_since": "2019",
+      "threat_level": "Critical"
+    }
+  ],
+  "paste_sites": [
+    {
+      "name": "darkpaste.onion [SIMULATED]",
+      "category": "Credential Sharing",
+      "posts_monitored": 1247,
+      "threat_level": "High"
+    },
+    {
+      "name": "leakforum.onion [SIMULATED]",
+      "category": "Database Trading",
+      "posts_monitored": 3891,
+      "threat_level": "Critical"
+    },
+    {
+      "name": "anonpaste.onion [SIMULATED]",
+      "category": "Anonymous Paste",
+      "posts_monitored": 782,
+      "threat_level": "Medium"
+    }
+  ]
+}

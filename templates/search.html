@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 class="page-title">🔍 Credential Breach Monitor</h1>
+<p class="page-sub">Check if your email or domain has been exposed in a known data breach.</p>
+
+<!-- SEARCH TABS -->
+<div class="tab-container">
+  <button class="tab-btn active" onclick="switchTab('email')">📧 Email Check</button>
+  <button class="tab-btn"        onclick="switchTab('domain')">🌐 Domain Check</button>
+</div>
+
+<!-- EMAIL CHECK FORM -->
+<div id="emailTab" class="search-box">
+  <input  type="email" id="emailInput"
+          placeholder="Enter email address (e.g. user@gmail.com)"
+          class="search-input"/>
+  <button onclick="checkEmail()" class="search-btn">🔎 Check Email</button>
+</div>
+
+<!-- DOMAIN CHECK FORM -->
+<div id="domainTab" class="search-box" style="display:none;">
+  <input  type="text" id="domainInput"
+          placeholder="Enter domain (e.g. gmail.com)"
+          class="search-input"/>
+  <button onclick="checkDomain()" class="search-btn">🔎 Check Domain</button>
+</div>
+
+<!-- LOADING SPINNER -->
+<div id="loader" class="loader" style="display:none;">
+  ⏳ Scanning breach database...
+</div>
+
+<!-- RESULTS PANEL -->
+<div id="resultPanel" style="display:none;">
+
+  <!-- Risk Badge -->
+  <div class="result-header">
+    <div>
+      <p class="result-label">Email / Domain Checked</p>
+      <p class="result-value" id="checkedEmail">—</p>
+    </div>
+    <div>
+      <p class="result-label">Risk Level</p>
+      <p id="riskBadge" class="risk-badge">—</p>
+    </div>
+    <div>
+      <p class="result-label">Breaches Found</p>
+      <p class="result-value" id="breachCount">—</p>
+    </div>
+    <div>
+      <p class="result-label">Hash Used (SHA-256)</p>
+      <p class="result-value hash-val" id="hashUsed">—</p>
+    </div>
+  </div>
+
+  <!-- Breach Details Table -->
+  <div class="table-box" id="breachDetails" style="margin-top:24px;">
+    <h3>📋 Breach Details</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Source</th><th>Date</th>
+          <th>Data Exposed</th><th>Affected</th><th>Severity</th>
+        </tr>
+      </thead>
+      <tbody id="breachDetailBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Clean Result -->
+  <div id="cleanResult" class="clean-box" style="display:none;">
+    ✅ No breaches found for this email/domain. You appear to be safe.
+  </div>
+
+</div>
+
+<!-- ── Inline CSS for this page ─────────────────────────────── -->
+<style>
+.page-sub   { color:#8b949e; margin-bottom:24px; }
+.tab-container { display:flex; gap:12px; margin-bottom:20px; }
+.tab-btn {
+  padding:10px 24px; border:1px solid #30363d;
+  background:#161b22; color:#8b949e; border-radius:6px;
+  cursor:pointer; font-size:0.9rem; transition:all 0.2s;
+}
+.tab-btn.active, .tab-btn:hover {
+  background:#58a6ff; color:#0d1117; border-color:#58a6ff;
+}
+.search-box   { display:flex; gap:12px; margin-bottom:24px; }
+.search-input {
+  flex:1; padding:12px 16px; background:#161b22;
+  border:1px solid #30363d; border-radius:8px;
+  color:#e6edf3; font-size:1rem; outline:none;
+}
+.search-input:focus { border-color:#58a6ff; }
+.search-btn {
+  padding:12px 28px; background:#238636;
+  color:#fff; border:none; border-radius:8px;
+  cursor:pointer; font-size:1rem; font-weight:600;
+  transition:background 0.2s;
+}
+.search-btn:hover { background:#2ea043; }
+.loader { color:#58a6ff; font-size:1.1rem; margin:20px 0; }
+
+.result-header {
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
+  gap:20px; background:#161b22;
+  border:1px solid #30363d; border-radius:10px; padding:24px;
+}
+.result-label { color:#8b949e; font-size:0.8rem; margin-bottom:6px; }
+.result-value { color:#e6edf3; font-size:1rem; font-weight:600; }
+.hash-val     { font-family:monospace; font-size:0.85rem; color:#58a6ff; }
+
+.risk-badge {
+  display:inline-block; padding:6px 18px;
+  border-radius:20px; font-weight:700; font-size:1rem;
+}
+.risk-Critical { background:#3d1a1a; color:#ff7b72; }
+.risk-High     { background:#3d2b00; color:#f0883e; }
+.risk-Medium   { background:#2d2f00; color:#e3b341; }
+.risk-Low      { background:#1a2e1a; color:#56d364; }
+.risk-Safe     { background:#1a2e1a; color:#56d364; }
+
+.clean-box {
+  background:#1a2e1a; border:1px solid #56d364;
+  color:#56d364; border-radius:10px;
+  padding:20px; text-align:center; font-size:1.1rem;
+}
+</style>
+
+<!-- ── JavaScript for this page ──────────────────────────────── -->
+<script>
+function switchTab(tab) {
+  document.getElementById('emailTab').style.display  = tab === 'email'  ? 'flex' : 'none';
+  document.getElementById('domainTab').style.display = tab === 'domain' ? 'flex' : 'none';
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', (tab === 'email' && i === 0) || (tab === 'domain' && i === 1));
+  });
+  hideResults();
+}
+
+function hideResults() {
+  document.getElementById('resultPanel').style.display = 'none';
+  document.getElementById('loader').style.display      = 'none';
+}
+
+function showLoader()  { document.getElementById('loader').style.display = 'block'; }
+function hideLoader()  { document.getElementById('loader').style.display = 'none';  }
+
+// ── Email Check ─────────────────────────────────────────────────
+function checkEmail() {
+  const email = document.getElementById('emailInput').value.trim();
+  if (!email) { alert('Please enter an email address.'); return; }
+
+  showLoader();
+  fetch('/api/check/email', {
+    method : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body   : JSON.stringify({ email })
+  })
+  .then(r => r.json())
+  .then(data => {
+    hideLoader();
+    renderResults(data, email);
+  });
+}
+
+// ── Domain Check ────────────────────────────────────────────────
+function checkDomain() {
+  const domain = document.getElementById('domainInput').value.trim();
+  if (!domain) { alert('Please enter a domain.'); return; }
+
+  showLoader();
+  fetch('/api/check/domain', {
+    method : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body   : JSON.stringify({ domain })
+  })
+  .then(r => r.json())
+  .then(data => {
+    hideLoader();
+    renderResults(data, domain);
+  });
+}
+
+// ── Render Results ───────────────────────────────────────────────
+function renderResults(data, identifier) {
+  const panel = document.getElementById('resultPanel');
+  panel.style.display = 'block';
+
+  // Fill header info
+  document.getElementById('checkedEmail').textContent =
+    data.email_checked || data.domain || identifier;
+  document.getElementById('breachCount').textContent =
+    data.breach_count || 0;
+  document.getElementById('hashUsed').textContent =
+    data.hash_used || 'N/A';
+
+  // Risk badge
+  const risk = data.risk_level || 'Safe';
+  const badge = document.getElementById('riskBadge');
+  badge.textContent  = risk;
+  badge.className    = 'risk-badge risk-' + risk;
+
+  // Breach table
+  const breaches = data.breaches || [];
+  const tbody    = document.getElementById('breachDetailBody');
+  tbody.innerHTML = '';
+
+  const cleanBox     = document.getElementById('cleanResult');
+  const breachDetails = document.getElementById('breachDetails');
+
+  if (breaches.length === 0) {
+    breachDetails.style.display = 'none';
+    cleanBox.style.display      = 'block';
+  } else {
+    breachDetails.style.display = 'block';
+    cleanBox.style.display      = 'none';
+    breaches.forEach(b => {
+      const sev = b.severity || 'Low';
+      tbody.innerHTML += `
+        <tr>
+          <td>${b.source}</td>
+          <td>${b.breach_date || b.date || '—'}</td>
+          <td>${b.data_type || '—'}</td>
+          <td>${Number(b.affected_count || 0).toLocaleString()}</td>
+          <td><span class="badge badge-${sev}">${sev}</span></td>
+        </tr>`;
+    });
+  }
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 class="page-title">🌐 Dark Web Simulation Layer</h1>
+<p class="page-sub">Simulated threat intelligence feed — academic implementation only. No actual TOR access.</p>
+
+<!-- STATS ROW -->
+<div class="stats-grid" id="dwStatsGrid">
+  <div class="card">
+    <h3>Leaks Monitored</h3>
+    <p class="stat-num" id="dwLeaks">—</p>
+  </div>
+  <div class="card">
+    <h3>Emails Exposed</h3>
+    <p class="stat-num" id="dwEmails">—</p>
+  </div>
+  <div class="card">
+    <h3>Paste Sites</h3>
+    <p class="stat-num" id="dwPastes">—</p>
+  </div>
+  <div class="card">
+    <h3>Posts Monitored</h3>
+    <p class="stat-num" id="dwPosts">—</p>
+  </div>
+</div>
+
+<!-- DARK WEB EMAIL SCANNER -->
+<div class="dw-scanner">
+  <h3>🔦 Dark Web Email Scanner</h3>
+  <p style="color:#8b949e; font-size:0.9rem; margin-bottom:16px;">
+    Scan the simulated dark web dataset for email exposure across leak forums and paste sites.
+  </p>
+  <div style="display:flex; gap:12px;">
+    <input type="email" id="dwEmailInput"
+           placeholder="Enter email to scan dark web simulation..."
+           class="search-input"/>
+    <button onclick="scanDarkWeb()" class="scan-btn">🔍 Scan Dark Web</button>
+  </div>
+  <div id="dwLoader" style="display:none; color:#58a6ff; margin-top:12px;">
+    ⏳ Scanning simulated dark web sources...
+  </div>
+  <div id="dwResult" style="display:none; margin-top:20px;"></div>
+</div>
+
+<!-- TWO COLUMN LAYOUT -->
+<div class="dw-grid">
+
+  <!-- THREAT ACTORS -->
+  <div class="dw-box">
+    <h3>🎭 Threat Actor Profiles</h3>
+    <p class="box-sub">Simulated dark web actor intelligence</p>
+    <div id="actorList"></div>
+  </div>
+
+  <!-- PASTE SITES -->
+  <div class="dw-box">
+    <h3>📋 Monitored Paste Sites</h3>
+    <p class="box-sub">Simulated .onion source monitoring</p>
+    <div id="pasteList"></div>
+  </div>
+
+</div>
+
+<!-- LEAK FEED -->
+<div class="table-box" style="margin-top:24px;">
+  <h3>📡 Simulated Dark Web Leak Feed</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Source [SIM]</th>
+        <th>Type</th>
+        <th>Title</th>
+        <th>Data Exposed</th>
+        <th>Threat</th>
+        <th>Date</th>
+        <th>Verified</th>
+      </tr>
+    </thead>
+    <tbody id="leakFeedBody"></tbody>
+  </table>
+</div>
+
+<!-- TOR INFO BOX -->
+<div class="tor-box">
+  <h3>🧅 How TOR Works — Educational Overview</h3>
+  <div id="torInfo"></div>
+</div>
+
+<style>
+.page-sub   { color:#8b949e; margin-bottom:24px; }
+.box-sub    { color:#8b949e; font-size:0.85rem; margin-bottom:14px; }
+
+.dw-scanner {
+  background:#161b22; border:1px solid #30363d;
+  border-radius:10px; padding:24px; margin-bottom:24px;
+}
+.dw-scanner h3 { margin-bottom:8px; color:#e6edf3; }
+
+.scan-btn {
+  padding:12px 24px; background:#6e40c9;
+  color:#fff; border:none; border-radius:8px;
+  cursor:pointer; font-weight:600; white-space:nowrap;
+  transition:background 0.2s;
+}
+.scan-btn:hover { background:#8957e5; }
+
+.dw-grid {
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px,1fr));
+  gap:20px; margin-bottom:24px;
+}
+.dw-box {
+  background:#161b22; border:1px solid #30363d;
+  border-radius:10px; padding:24px;
+}
+.dw-box h3 { margin-bottom:4px; color:#e6edf3; }
+
+/* Actor cards */
+.actor-card {
+  background:#0d1117; border:1px solid #30363d;
+  border-radius:8px; padding:14px; margin-bottom:12px;
+}
+.actor-alias { font-weight:700; color:#d2a8ff; margin-bottom:4px; }
+.actor-meta  { font-size:0.82rem; color:#8b949e; }
+
+/* Paste site cards */
+.paste-card {
+  background:#0d1117; border:1px solid #30363d;
+  border-radius:8px; padding:14px; margin-bottom:12px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.paste-name { font-weight:600; color:#79c0ff; font-size:0.9rem; }
+.paste-meta { font-size:0.8rem; color:#8b949e; margin-top:2px; }
+
+/* TOR box */
+.tor-box {
+  background:#161b22; border:1px solid #6e40c9;
+  border-radius:10px; padding:24px; margin-top:24px;
+}
+.tor-box h3 { color:#d2a8ff; margin-bottom:16px; }
+.tor-layer {
+  display:flex; gap:12px; align-items:flex-start;
+  background:#0d1117; border-radius:8px;
+  padding:12px; margin-bottom:10px;
+}
+.tor-num {
+  background:#6e40c9; color:#fff;
+  border-radius:50%; width:28px; height:28px;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:700; flex-shrink:0; font-size:0.85rem;
+}
+.tor-text h4 { color:#e6edf3; font-size:0.9rem; margin-bottom:2px; }
+.tor-text p  { color:#8b949e; font-size:0.82rem; }
+
+/* Scan result */
+.scan-found { background:#3d1a1a; border:1px solid #ff7b72; border-radius:8px; padding:16px; }
+.scan-clean { background:#1a2e1a; border:1px solid #56d364; border-radius:8px; padding:16px; color:#56d364; }
+.scan-match { background:#0d1117; border-radius:6px; padding:12px; margin-top:10px; }
+
+.search-input {
+  flex:1; padding:12px 16px; background:#0d1117;
+  border:1px solid #30363d; border-radius:8px;
+  color:#e6edf3; font-size:1rem; outline:none;
+}
+.search-input:focus { border-color:#6e40c9; }
+</style>
+
+<script>
+// ── Load Stats ───────────────────────────────────────────────────
+fetch('/api/darkweb/stats')
+  .then(r => r.json())
+  .then(d => {
+    document.getElementById('dwLeaks').textContent  = d.total_leaks;
+    document.getElementById('dwEmails').textContent = d.total_emails_exposed;
+    document.getElementById('dwPastes').textContent = d.total_paste_sites;
+    document.getElementById('dwPosts').textContent  = Number(d.total_posts_monitored).toLocaleString();
+  });
+
+// ── Load Threat Actors ───────────────────────────────────────────
+fetch('/api/darkweb/actors')
+  .then(r => r.json())
+  .then(actors => {
+    const el = document.getElementById('actorList');
+    actors.forEach(a => {
+      el.innerHTML += `
+        <div class="actor-card">
+          <div class="actor-alias">👤 ${a.alias}</div>
+          <div class="actor-meta">Type: ${a.type}</div>
+          <div class="actor-meta">Activity: ${a.activity}</div>
+          <div class="actor-meta" style="margin-top:6px;">
+            <span class="badge badge-${a.threat_level}">${a.threat_level}</span>
+            &nbsp; Known since: ${a.known_since}
+          </div>
+        </div>`;
+    });
+  });
+
+// ── Load Paste Sites ─────────────────────────────────────────────
+fetch('/api/darkweb/pastes')
+  .then(r => r.json())
+  .then(pastes => {
+    const el = document.getElementById('pasteList');
+    pastes.forEach(p => {
+      el.innerHTML += `
+        <div class="paste-card">
+          <div>
+            <div class="paste-name">🧅 ${p.name}</div>
+            <div class="paste-meta">${p.category}</div>
+          </div>
+          <div style="text-align:right;">
+            <span class="badge badge-${p.threat_level}">${p.threat_level}</span>
+            <div class="paste-meta">${Number(p.posts_monitored).toLocaleString()} posts</div>
+          </div>
+        </div>`;
+    });
+  });
+
+// ── Load Leak Feed ───────────────────────────────────────────────
+fetch('/api/darkweb/leaks')
+  .then(r => r.json())
+  .then(leaks => {
+    const tbody = document.getElementById('leakFeedBody');
+    leaks.forEach(l => {
+      const verified = l.verified
+        ? '<span style="color:#56d364">✔ Yes</span>'
+        : '<span style="color:#8b949e">— No</span>';
+      tbody.innerHTML += `
+        <tr>
+          <td style="color:#79c0ff; font-size:0.82rem;">${l.sim_source}</td>
+          <td>${l.leak_type}</td>
+          <td>${l.post_title}</td>
+          <td style="font-size:0.82rem;">${l.data_exposed.join(', ')}</td>
+          <td><span class="badge badge-${l.threat_level}">${l.threat_level}</span></td>
+          <td>${l.date_posted}</td>
+          <td>${verified}</td>
+        </tr>`;
+    });
+  });
+
+// ── Load TOR Info ────────────────────────────────────────────────
+fetch('/api/darkweb/tor-info')
+  .then(r => r.json())
+  .then(info => {
+    const el = document.getElementById('torInfo');
+    let html = `<p style="color:#c9d1d9; margin-bottom:16px;">${info.tor_overview}</p>`;
+    info.layers.forEach(l => {
+      html += `
+        <div class="tor-layer">
+          <div class="tor-num">${l.layer}</div>
+          <div class="tor-text">
+            <h4>${l.name}</h4>
+            <p>${l.role}</p>
+          </div>
+        </div>`;
+    });
+    html += `<p style="color:#8b949e; margin-top:14px; font-size:0.85rem;">
+               ⚠️ ${info.academic_note}</p>`;
+    el.innerHTML = html;
+  });
+
+// ── Dark Web Email Scanner ───────────────────────────────────────
+function scanDarkWeb() {
+  const email = document.getElementById('dwEmailInput').value.trim();
+  if (!email) { alert('Please enter an email address.'); return; }
+
+  document.getElementById('dwLoader').style.display = 'block';
+  document.getElementById('dwResult').style.display = 'none';
+
+  fetch('/api/darkweb/scan', {
+    method : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body   : JSON.stringify({ email })
+  })
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('dwLoader').style.display = 'none';
+    const resultEl = document.getElementById('dwResult');
+    resultEl.style.display = 'block';
+
+    if (data.dark_web_hits > 0) {
+      let matchesHTML = '';
+      data.matches.forEach(m => {
+        matchesHTML += `
+          <div class="scan-match">
+            <strong style="color:#ff7b72;">📍 ${m.sim_source}</strong><br/>
+            <span style="color:#8b949e; font-size:0.85rem;">
+              ${m.leak_type} — ${m.post_title}<br/>
+              Data Exposed: ${m.data_exposed.join(', ')}<br/>
+              Date: ${m.date_posted}
+            </span>
+            <span class="badge badge-${m.threat_level}" style="margin-top:6px; display:inline-block;">
+              ${m.threat_level}
+            </span>
+          </div>`;
+      });
+      resultEl.innerHTML = `
+        <div class="scan-found">
+          <strong style="color:#ff7b72;">⚠️ Found on ${data.dark_web_hits} dark web source(s)</strong>
+          <p style="color:#8b949e; font-size:0.85rem; margin:6px 0;">
+            Email: ${data.email_masked} &nbsp;|&nbsp; Hash: ${data.email_hash}
+          </p>
+          ${matchesHTML}
+          <p style="color:#484f58; font-size:0.75rem; margin-top:10px;">${data.disclaimer}</p>
+        </div>`;
+    } else {
+      resultEl.innerHTML = `
+        <div class="scan-clean">
+          ✅ No matches found in simulated dark web sources for ${data.email_masked}
+        </div>`;
+    }
+  });
+}
+</script>
+
+{% endblock %}

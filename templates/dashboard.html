@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 class="page-title">📊 Threat Intelligence Dashboard</h1>
+
+<!-- STAT CARDS -->
+<div class="stats-grid" id="statsGrid">
+  <div class="card">
+    <h3>Total Breaches</h3>
+    <p class="stat-num" id="totalBreaches">—</p>
+  </div>
+  <div class="card">
+    <h3>Total Affected Users</h3>
+    <p class="stat-num" id="totalAffected">—</p>
+  </div>
+  <div class="card">
+    <h3>Dark Web Hits</h3>
+    <p class="stat-num" id="darkWebHits">—</p>
+  </div>
+</div>
+
+<!-- CHARTS -->
+<div class="charts-grid">
+  <div class="chart-box">
+    <h3>Breach Severity Breakdown</h3>
+    <canvas id="severityChart"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>Top Breaches by Affected Count</h3>
+    <canvas id="breachChart"></canvas>
+  </div>
+</div>
+
+<!-- BREACH TABLE -->
+<div class="table-box">
+  <h3>📋 All Ingested Breach Records</h3>
+  <table id="breachTable">
+    <thead>
+      <tr>
+        <th>#</th><th>Source</th><th>Date</th>
+        <th>Data Types</th><th>Affected</th><th>Severity</th>
+      </tr>
+    </thead>
+    <tbody id="breachTableBody"></tbody>
+  </table>
+</div>
+
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}
