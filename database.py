@@ -1,18 +1,47 @@
-# database.py
+import os
+import shutil
 import sqlite3
+from pathlib import Path
 
-DB_PATH = "threat_intel.db"
+BASE_DIR = Path(__file__).resolve().parent
+BUNDLED_DB_PATH = BASE_DIR / "threat_intel.db"
+
+
+def _runtime_root() -> Path:
+    configured = os.environ.get("APP_RUNTIME_DIR")
+    if configured:
+        return Path(configured)
+    if os.environ.get("VERCEL"):
+        return Path("/tmp/dark-intel")
+    return BASE_DIR
+
+
+RUNTIME_ROOT = _runtime_root()
+DB_PATH = RUNTIME_ROOT / "threat_intel.db"
+
+
+def ensure_runtime_db():
+    RUNTIME_ROOT.mkdir(parents=True, exist_ok=True)
+    if DB_PATH.exists():
+        return
+
+    if BUNDLED_DB_PATH.exists() and BUNDLED_DB_PATH != DB_PATH:
+        shutil.copy2(BUNDLED_DB_PATH, DB_PATH)
+
 
 def get_connection():
+    ensure_runtime_db()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS breaches (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             source          TEXT NOT NULL,
@@ -22,9 +51,11 @@ def init_db():
             severity        TEXT DEFAULT 'Medium',
             ingested_at     TEXT DEFAULT (datetime('now'))
         )
-    """)
+        """
+    )
 
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS credentials (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             email_hash   TEXT NOT NULL,
@@ -34,9 +65,11 @@ def init_db():
             checked_at   TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (breach_id) REFERENCES breaches(id)
         )
-    """)
+        """
+    )
 
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS threats (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             breach_id   INTEGER,
@@ -47,9 +80,11 @@ def init_db():
             FOREIGN KEY (breach_id) REFERENCES breaches(id),
             FOREIGN KEY (cred_id)   REFERENCES credentials(id)
         )
-    """)
+        """
+    )
 
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS alerts (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
             threat_id INTEGER,
@@ -58,11 +93,13 @@ def init_db():
             status    TEXT DEFAULT 'Pending',
             FOREIGN KEY (threat_id) REFERENCES threats(id)
         )
-    """)
+        """
+    )
 
     conn.commit()
     conn.close()
-    print("[✔] Database initialized successfully.")
+    print("[ok] Database initialized successfully.")
+
 
 if __name__ == "__main__":
     init_db()
