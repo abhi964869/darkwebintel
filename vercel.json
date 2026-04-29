@@ -1,4 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build"
+  "buildCommand": "npm run build",
+  "outputDirectory": "public",
+  "functions": {
+    "app.py": {
+      "maxDuration": 30,
+      "includeFiles": "{data/**,templates/**,threat_intel.db}",
+      "excludeFiles": "{node_modules/**,src/**,dist/**,static/**,__pycache__/**,**/*.pyc,test_api.py,fix.py,AlertsPanel.jsx,App.jsx,Dashboard.jsx,Keywords.jsx,Login.jsx,Sidebar.jsx,ThreatList.jsx,index.html,index.js}"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "^/(?!api(?:/|$)|flask(?:/|$)|assets/|favicon\\.ico$).*$",
+      "destination": "/index.html"
+    }
+  ]
 }
