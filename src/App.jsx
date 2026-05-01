@@ -7,8 +7,7 @@ const severityStyles = {
   Low: "border-emerald-400/40 bg-emerald-500/10 text-emerald-100 shadow-emerald-500/10",
 };
 
-const navItems = ["Overview", "Breaches", "Intel", "Reports"];
-const TOKEN_KEY = "dark_intel_token";
+const navItems = ["Overview", "Breaches", "Intel", "Archive"];
 
 function classNames(...parts) {
   return parts.filter(Boolean).join(" ");
@@ -17,6 +16,15 @@ function classNames(...parts) {
 function SeverityBadge({ value }) {
   const classes = severityStyles[value] || "border-slate-500/30 bg-slate-500/10 text-slate-200";
   return <span className={classNames("inline-flex rounded-full border px-2.5 py-1 text-xs font-medium shadow-lg", classes)}>{value || "Unknown"}</span>;
+}
+
+function StatusDot() {
+  return (
+    <span className="relative flex h-3 w-3">
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+      <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-300" />
+    </span>
+  );
 }
 
 function StatCard({ label, value, detail, tone = "cyan", delay = 0 }) {
@@ -50,15 +58,6 @@ function Panel({ title, subtitle, action, children, id }) {
       </div>
       {children}
     </section>
-  );
-}
-
-function StatusDot() {
-  return (
-    <span className="relative flex h-3 w-3">
-      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-      <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-300" />
-    </span>
   );
 }
 
@@ -105,8 +104,8 @@ function ReportCard({ item }) {
     <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-white">{item.target_email}</p>
-          <p className="mt-1 text-xs text-slate-500">{item.created_at}</p>
+          <p className="text-sm font-semibold text-white">{item.created_at}</p>
+          <p className="mt-1 text-xs text-slate-500">Saved report</p>
         </div>
         <SeverityBadge value={item.risk_label} />
       </div>
@@ -116,144 +115,44 @@ function ReportCard({ item }) {
   );
 }
 
-function WatchlistCard({ item, onDelete }) {
+function StoredEmailCard({ item, active, onSelect }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+    <button
+      onClick={() => onSelect(item.email)}
+      className={classNames(
+        "w-full rounded-2xl border p-4 text-left transition",
+        active ? "border-cyan-300/50 bg-cyan-300/10" : "border-white/10 bg-slate-950/45 hover:bg-slate-950/65",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-white">{item.query_value}</p>
-          <p className="mt-1 text-xs text-slate-500">{item.query_type} monitored item</p>
+          <p className="text-sm font-semibold text-white">{item.email}</p>
+          <p className="mt-1 text-xs text-slate-500">{item.domain}</p>
         </div>
-        <SeverityBadge value={item.latest_severity || "Low"} />
+        <SeverityBadge value={item.last_risk_label || "Low"} />
       </div>
-      {item.notes && <p className="mt-3 text-sm text-slate-400">{item.notes}</p>}
-      <div className="mt-4 flex items-center justify-between">
-        <p className="text-xs text-slate-500">Status: {item.latest_status || "pending"}</p>
-        <button onClick={() => onDelete(item.id)} className="rounded-full border border-rose-300/20 px-3 py-1 text-xs text-rose-100 transition hover:bg-rose-400/10">
-          Remove
-        </button>
+      <div className="mt-3 flex items-center gap-3 text-xs text-slate-400">
+        <span>{item.lookup_count} lookups</span>
+        <span>{item.report_count} reports</span>
       </div>
-    </div>
-  );
-}
-
-function AuthScreen({ mode, setMode, form, setForm, onSubmit, error, loading }) {
-  return (
-    <main className="relative min-h-screen overflow-hidden bg-[#050816] text-slate-100">
-      <div className="mesh-bg" />
-      <div className="grid-glow" />
-      <div className="relative mx-auto flex min-h-screen max-w-6xl items-center px-4 py-10 sm:px-6 lg:px-8">
-        <div className="grid w-full gap-10 lg:grid-cols-[1.05fr_0.95fr]">
-          <section className="hero-enter">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-xs font-medium text-emerald-100">
-              <StatusDot />
-              Premium cyber intelligence workspace
-            </div>
-            <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-6xl">
-              Personal threat monitoring with saved user data and live intelligence.
-            </h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-400">
-              Create an account to monitor domains, store your reports, save internet lookups, and work from a single premium command center.
-            </p>
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              <StatCard label="Accounts" value="Secure" detail="stored in SQLite" tone="cyan" />
-              <StatCard label="Monitoring" value="Watchlists" detail="saved per user" tone="gold" delay={80} />
-              <StatCard label="Reports" value="Persistent" detail="premium workspace" tone="emerald" delay={160} />
-            </div>
-          </section>
-
-          <section className="reveal-card rounded-[2rem] border border-white/10 bg-slate-950/70 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.25em] text-cyan-200">Dark Intel</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">{mode === "login" ? "Welcome back" : "Create your premium account"}</h2>
-              </div>
-              <div className="rounded-full border border-white/10 bg-white/[0.04] p-1">
-                {["login", "register"].map((item) => (
-                  <button
-                    key={item}
-                    onClick={() => setMode(item)}
-                    className={classNames(
-                      "rounded-full px-4 py-2 text-xs font-medium capitalize transition",
-                      mode === item ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:text-white",
-                    )}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {mode === "register" && (
-                <>
-                  <input
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10"
-                    placeholder="Full name"
-                    value={form.full_name}
-                    onChange={(event) => setForm((current) => ({ ...current, full_name: event.target.value }))}
-                  />
-                  <input
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10"
-                    placeholder="Company"
-                    value={form.company}
-                    onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))}
-                  />
-                </>
-              )}
-
-              <input
-                className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10"
-                placeholder="Email address"
-                value={form.email}
-                onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-              />
-              <input
-                type="password"
-                className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10"
-                placeholder="Password"
-                value={form.password}
-                onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                onKeyDown={(event) => event.key === "Enter" && onSubmit()}
-              />
-              {error && <p className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">{error}</p>}
-              <button
-                onClick={onSubmit}
-                disabled={loading}
-                className="button-shine w-full rounded-2xl bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-3 text-sm font-bold text-slate-950 shadow-xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-500/20 disabled:cursor-wait disabled:opacity-60"
-              >
-                {loading ? "Please wait..." : mode === "login" ? "Sign In" : "Create Premium Account"}
-              </button>
-            </div>
-          </section>
-        </div>
-      </div>
-    </main>
+      {item.last_summary && <p className="mt-3 text-sm text-slate-400">{item.last_summary}</p>}
+    </button>
   );
 }
 
 export default function App() {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || "");
-  const [user, setUser] = useState(null);
-  const [authMode, setAuthMode] = useState("login");
-  const [authForm, setAuthForm] = useState({ full_name: "", company: "", email: "", password: "" });
-  const [authError, setAuthError] = useState("");
-  const [authLoading, setAuthLoading] = useState(false);
-
   const [stats, setStats] = useState(null);
   const [breaches, setBreaches] = useState([]);
   const [darkStats, setDarkStats] = useState(null);
   const [alerts, setAlerts] = useState(null);
-  const [watchlist, setWatchlist] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [reports, setReports] = useState([]);
+
+  const [storedEmails, setStoredEmails] = useState([]);
+  const [selectedEmail, setSelectedEmail] = useState("");
+  const [selectedRecords, setSelectedRecords] = useState({ history: [], reports: [] });
 
   const [liveQuery, setLiveQuery] = useState("gmail.com");
   const [liveIntel, setLiveIntel] = useState(null);
   const [loadingIntel, setLoadingIntel] = useState(false);
-
-  const [watchlistForm, setWatchlistForm] = useState({ query_value: "", query_type: "domain", notes: "" });
-  const [watchlistLoading, setWatchlistLoading] = useState(false);
 
   const [email, setEmail] = useState("");
   const [report, setReport] = useState(null);
@@ -265,10 +164,6 @@ export default function App() {
     if (!headers.has("Content-Type") && options.body) {
       headers.set("Content-Type", "application/json");
     }
-    if (token) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
-
     const response = await fetch(path, { ...options, headers });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -278,27 +173,30 @@ export default function App() {
   };
 
   const loadPublicData = async () => {
-    const [statsData, breachData, darkData, alertData] = await Promise.all([
+    const [statsData, breachData, darkData, alertData, storedData] = await Promise.all([
       apiFetch("/api/stats"),
       apiFetch("/api/breaches"),
       apiFetch("/api/darkweb/stats"),
       apiFetch("/api/alerts/stats"),
+      apiFetch("/api/tracked-emails"),
     ]);
     setStats(statsData);
     setBreaches(Array.isArray(breachData) ? breachData : []);
     setDarkStats(darkData);
     setAlerts(alertData);
+    setStoredEmails(storedData.items || []);
+    if (!selectedEmail && storedData.items?.length) {
+      setSelectedEmail(storedData.items[0].email);
+    }
   };
 
-  const loadPrivateData = async () => {
-    const [watchlistData, historyData, reportsData] = await Promise.all([
-      apiFetch("/api/user/watchlist"),
-      apiFetch("/api/user/history"),
-      apiFetch("/api/user/reports"),
-    ]);
-    setWatchlist(watchlistData.items || []);
-    setHistory(historyData.items || []);
-    setReports(reportsData.items || []);
+  const loadEmailRecords = async (targetEmail) => {
+    if (!targetEmail) {
+      setSelectedRecords({ history: [], reports: [] });
+      return;
+    }
+    const data = await apiFetch(`/api/email-records?email=${encodeURIComponent(targetEmail)}`);
+    setSelectedRecords({ history: data.history || [], reports: data.reports || [] });
   };
 
   useEffect(() => {
@@ -306,65 +204,18 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!token) {
-      setUser(null);
-      return;
+    if (selectedEmail) {
+      loadEmailRecords(selectedEmail).catch(() => setMessage("Could not load stored email records."));
     }
-
-    apiFetch("/api/auth/me")
-      .then((data) => {
-        setUser(data);
-        return loadPrivateData();
-      })
-      .catch(() => {
-        localStorage.removeItem(TOKEN_KEY);
-        setToken("");
-        setUser(null);
-      });
-  }, [token]);
+  }, [selectedEmail]);
 
   useEffect(() => {
     runLiveLookup("gmail.com");
-  }, [token]);
+  }, []);
 
   const totalAffected = useMemo(() => breaches.reduce((sum, item) => sum + Number(item.affected_count || 0), 0), [breaches]);
   const maxAffected = useMemo(() => Math.max(...breaches.map((item) => Number(item.affected_count || 0)), 1), [breaches]);
-
-  const handleAuthSubmit = async () => {
-    setAuthError("");
-    setAuthLoading(true);
-    try {
-      const endpoint = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
-      const payload = authMode === "login"
-        ? { email: authForm.email, password: authForm.password }
-        : authForm;
-      const data = await apiFetch(endpoint, { method: "POST", body: JSON.stringify(payload), headers: {} });
-      localStorage.setItem(TOKEN_KEY, data.token);
-      setToken(data.token);
-      setUser(data.user);
-      setAuthForm({ full_name: "", company: "", email: "", password: "" });
-      setMessage(`Welcome, ${data.user.full_name}.`);
-    } catch (error) {
-      setAuthError(error.message);
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const logout = async () => {
-    try {
-      await apiFetch("/api/auth/logout", { method: "POST" });
-    } catch {
-      // no-op
-    }
-    localStorage.removeItem(TOKEN_KEY);
-    setToken("");
-    setUser(null);
-    setWatchlist([]);
-    setHistory([]);
-    setReports([]);
-    setMessage("Signed out.");
-  };
+  const severityBreakdown = stats?.severity_breakdown || {};
 
   const runLiveLookup = async (queryOverride) => {
     const query = (queryOverride ?? liveQuery).trim();
@@ -372,52 +223,30 @@ export default function App() {
       setMessage("Enter a valid domain or organization to search.");
       return;
     }
+
     setLoadingIntel(true);
     try {
       const data = await apiFetch("/api/intel/live", {
         method: "POST",
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({
+          query,
+          context_email: selectedEmail || email,
+        }),
       });
-      setLiveIntel(data);
-      if (user) {
-        await loadPrivateData();
+      if (data.status === "error") {
+        throw new Error(data.message || "Live internet lookup failed.");
       }
+      setLiveIntel(data);
+      if (selectedEmail || email) {
+        await loadPublicData();
+        await loadEmailRecords(selectedEmail || email);
+      }
+      setMessage(`Loaded ${data.count} live results for ${data.query}.`);
     } catch (error) {
       setMessage(error.message);
       setLiveIntel(null);
     } finally {
       setLoadingIntel(false);
-    }
-  };
-
-  const addWatchlistItem = async () => {
-    if (watchlistForm.query_value.trim().length < 2) {
-      setMessage("Watchlist items need at least 2 characters.");
-      return;
-    }
-    setWatchlistLoading(true);
-    try {
-      await apiFetch("/api/user/watchlist", {
-        method: "POST",
-        body: JSON.stringify(watchlistForm),
-      });
-      setWatchlistForm({ query_value: "", query_type: "domain", notes: "" });
-      await loadPrivateData();
-      setMessage("Watchlist item saved.");
-    } catch (error) {
-      setMessage(error.message);
-    } finally {
-      setWatchlistLoading(false);
-    }
-  };
-
-  const deleteWatchlistItem = async (id) => {
-    try {
-      await apiFetch(`/api/user/watchlist/${id}`, { method: "DELETE" });
-      await loadPrivateData();
-      setMessage("Watchlist item removed.");
-    } catch (error) {
-      setMessage(error.message);
     }
   };
 
@@ -434,32 +263,17 @@ export default function App() {
         body: JSON.stringify({ email }),
       });
       setReport(data);
-      if (user) {
-        await loadPrivateData();
-      }
-      setMessage("Report generated and saved to your workspace.");
+      setSelectedEmail(email.toLowerCase());
+      await loadPublicData();
+      await loadEmailRecords(email.toLowerCase());
+      setMessage("Report generated and stored for this email.");
+      setLiveQuery(email.split("@")[1]);
     } catch (error) {
       setMessage(error.message);
     } finally {
       setLoadingReport(false);
     }
   };
-
-  if (!user) {
-    return (
-      <AuthScreen
-        mode={authMode}
-        setMode={setAuthMode}
-        form={authForm}
-        setForm={setAuthForm}
-        onSubmit={handleAuthSubmit}
-        error={authError}
-        loading={authLoading}
-      />
-    );
-  }
-
-  const severityBreakdown = stats?.severity_breakdown || {};
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#050816] text-slate-100">
@@ -474,7 +288,7 @@ export default function App() {
             </div>
             <div>
               <p className="text-sm font-semibold text-white">Dark Intel Premium</p>
-              <p className="text-xs text-slate-500">{user.company || "Independent analyst"} • {user.plan_name}</p>
+              <p className="text-xs text-slate-500">No login required • remembers previously used emails</p>
             </div>
           </div>
           <div className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] p-1 md:flex">
@@ -484,28 +298,19 @@ export default function App() {
               </a>
             ))}
           </div>
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-sm font-medium text-white">{user.full_name}</p>
-              <p className="text-xs text-slate-500">{user.email}</p>
-            </div>
-            <button onClick={logout} className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-white/10">
-              Sign Out
-            </button>
-          </div>
         </nav>
 
         <section id="overview" className="hero-enter mb-8 grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
           <div>
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-xs font-medium text-emerald-100">
               <StatusDot />
-              Premium workspace active
+              Email memory workspace active
             </div>
             <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-white sm:text-6xl">
-              Store your users, watchlists, reports, and intelligence in one polished backend.
+              Save the emails you investigate and reopen their intelligence instantly.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-400">
-              Your account is backed by SQLite storage and live API routes. Save internet lookups, monitor assets, and keep premium report history without leaving this dashboard.
+              Generate a report for any email, run live internet lookups against it, and the dashboard will keep that email’s saved history and reports ready without asking anyone to sign in.
             </p>
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-cyan-950/30 backdrop-blur-xl">
@@ -539,9 +344,9 @@ export default function App() {
 
         <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Breaches" value={stats?.total_breaches ?? breaches.length} detail="ingested records" tone="cyan" delay={0} />
-          <StatCard label="Watchlist" value={watchlist.length} detail="assets under monitoring" tone="gold" delay={80} />
-          <StatCard label="Lookup History" value={history.length} detail="saved live searches" tone="emerald" delay={160} />
-          <StatCard label="Saved Reports" value={reports.length} detail="premium stored reports" tone="rose" delay={240} />
+          <StatCard label="Affected Users" value={totalAffected.toLocaleString()} detail="total exposed identities" tone="gold" delay={80} />
+          <StatCard label="Tracked Emails" value={storedEmails.length} detail="saved from previous use" tone="emerald" delay={160} />
+          <StatCard label="Alerts" value={alerts?.total_alerts ?? 0} detail="logged report alerts" tone="rose" delay={240} />
         </section>
 
         <section className="mt-7 grid gap-6 lg:grid-cols-[1fr_380px]">
@@ -581,12 +386,8 @@ export default function App() {
             <Panel
               id="intel"
               title="Live Internet Intel"
-              subtitle="Search public web coverage for a company, domain, or provider."
-              action={
-                <span className="rounded-2xl border border-sky-200/20 bg-sky-200/10 px-3 py-2 text-xs font-semibold text-sky-100">
-                  Live
-                </span>
-              }
+              subtitle="Search public coverage and attach the results to the selected email."
+              action={<span className="rounded-2xl border border-sky-200/20 bg-sky-200/10 px-3 py-2 text-xs font-semibold text-sky-100">Live</span>}
             >
               <div className="space-y-3">
                 <input
@@ -620,41 +421,7 @@ export default function App() {
               )}
             </Panel>
 
-            <Panel
-              title="Watchlist"
-              subtitle="Store high-value targets for recurring monitoring."
-              action={<span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">{watchlist.length} items</span>}
-            >
-              <div className="space-y-3">
-                <input
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10"
-                  placeholder="example.com"
-                  value={watchlistForm.query_value}
-                  onChange={(event) => setWatchlistForm((current) => ({ ...current, query_value: event.target.value }))}
-                />
-                <input
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10"
-                  placeholder="Optional notes"
-                  value={watchlistForm.notes}
-                  onChange={(event) => setWatchlistForm((current) => ({ ...current, notes: event.target.value }))}
-                />
-                <button
-                  className="w-full rounded-2xl bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-3 text-sm font-bold text-slate-950 shadow-xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-500/20 disabled:cursor-wait disabled:opacity-60"
-                  onClick={addWatchlistItem}
-                  disabled={watchlistLoading}
-                >
-                  {watchlistLoading ? "Saving..." : "Save to Watchlist"}
-                </button>
-              </div>
-              <div className="mt-4 space-y-3">
-                {watchlist.slice(0, 3).map((item) => (
-                  <WatchlistCard key={item.id} item={item} onDelete={deleteWatchlistItem} />
-                ))}
-                {watchlist.length === 0 && <p className="text-sm text-slate-500">No watchlist items yet.</p>}
-              </div>
-            </Panel>
-
-            <Panel title="Generate Premium Report" subtitle="Create a risk report and save it to your account.">
+            <Panel title="Generate Report" subtitle="Create a report and store it under the email you enter.">
               <div className="space-y-3">
                 <input
                   className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10"
@@ -667,7 +434,7 @@ export default function App() {
                   onClick={generateReport}
                   disabled={loadingReport}
                 >
-                  {loadingReport ? "Generating..." : "Generate & Save Report"}
+                  {loadingReport ? "Generating..." : "Generate & Store Report"}
                 </button>
               </div>
               {report && (
@@ -689,28 +456,37 @@ export default function App() {
                 </div>
               )}
             </Panel>
+
+            <Panel title="Previously Used Emails" subtitle="Select an email to reopen its saved history and reports.">
+              <div className="space-y-3">
+                {storedEmails.map((item) => (
+                  <StoredEmailCard key={item.email} item={item} active={selectedEmail === item.email} onSelect={setSelectedEmail} />
+                ))}
+                {storedEmails.length === 0 && <p className="text-sm text-slate-500">No emails stored yet. Generate a report first to start the archive.</p>}
+              </div>
+            </Panel>
           </div>
         </section>
 
-        <section className="mt-7 grid gap-6 xl:grid-cols-3">
-          <Panel title="Internet Results" subtitle="Live public intelligence pulled from the web.">
+        <section id="archive" className="mt-7 grid gap-6 xl:grid-cols-3">
+          <Panel title="Internet Results" subtitle="Current live public intelligence for the active investigation.">
             <div className="space-y-4">
               {liveIntel?.results?.map((item, index) => <IntelResultCard key={`${item.link}-${index}`} item={item} />)}
               {(!liveIntel?.results || liveIntel.results.length === 0) && <p className="text-sm text-slate-500">Run a live search to display current web results.</p>}
             </div>
           </Panel>
 
-          <Panel title="Saved Lookup History" subtitle="Recent internet lookups stored for this user account.">
+          <Panel title="Saved Lookup History" subtitle={selectedEmail ? `Stored searches for ${selectedEmail}` : "Select an email to load its saved searches."}>
             <div className="space-y-4">
-              {history.map((item) => <HistoryCard key={item.id} item={item} />)}
-              {history.length === 0 && <p className="text-sm text-slate-500">No saved lookup history yet.</p>}
+              {selectedRecords.history.map((item) => <HistoryCard key={item.id} item={item} />)}
+              {selectedRecords.history.length === 0 && <p className="text-sm text-slate-500">No stored internet lookups for this email yet.</p>}
             </div>
           </Panel>
 
-          <Panel id="reports" title="Saved Reports" subtitle="Premium reports attached to your account.">
+          <Panel title="Saved Reports" subtitle={selectedEmail ? `Stored reports for ${selectedEmail}` : "Select an email to load its saved reports."}>
             <div className="space-y-4">
-              {reports.map((item) => <ReportCard key={item.id} item={item} />)}
-              {reports.length === 0 && <p className="text-sm text-slate-500">No saved reports yet.</p>}
+              {selectedRecords.reports.map((item) => <ReportCard key={item.id} item={item} />)}
+              {selectedRecords.reports.length === 0 && <p className="text-sm text-slate-500">No stored reports for this email yet.</p>}
             </div>
           </Panel>
         </section>

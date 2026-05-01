@@ -2,8 +2,10 @@
 # MODULE 3: Simulated dark web data + live public internet lookup
 
 import hashlib
+import html
 import json
 import os
+import re
 import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -21,7 +23,6 @@ SIM_DATA_PATH = os.path.join(
 
 
 def load_sim_data() -> dict:
-    """Loads the simulated dark web JSON dataset into memory."""
     if not os.path.exists(SIM_DATA_PATH):
         return {}
     with open(SIM_DATA_PATH, "r", encoding="utf-8") as f:
@@ -29,9 +30,6 @@ def load_sim_data() -> dict:
 
 
 def scan_dark_web_for_email(email: str) -> dict:
-    """
-    Simulates scanning dark web paste sites and leak forums for a specific email.
-    """
     if not email or "@" not in email:
         return {"status": "error", "message": "Invalid email."}
 
@@ -74,19 +72,28 @@ def _extract_domain(query: str) -> str:
 
 def _infer_severity(text: str) -> str:
     lowered = text.lower()
-    if any(token in lowered for token in ["ransomware", "critical", "breach", "leak", "stolen"]):
+    if any(token in lowered for token in ["ransomware", "critical", "breach", "leak", "stolen", "exploit"]):
         return "High"
-    if any(token in lowered for token in ["malware", "attack", "phishing", "cyber"]):
+    if any(token in lowered for token in ["malware", "attack", "phishing", "cyber", "vulnerability"]):
         return "Medium"
     return "Low"
 
 
-def _format_article(item: ET.Element) -> dict:
-    title = (item.findtext("title") or "").strip()
+def _clean_summary(text: str) -> str:
+    if not text:
+        return ""
+    cleaned = re.sub(r"<[^>]+>", " ", text)
+    cleaned = html.unescape(cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def _format_article(item: ET.Element, fallback_source: str) -> dict:
+    title = _clean_summary(item.findtext("title") or "")
     link = (item.findtext("link") or "").strip()
-    summary = (item.findtext("description") or "").strip()
+    summary = _clean_summary(item.findtext("description") or "")
     source_node = item.find("source")
-    source = source_node.text.strip() if source_node is not None and source_node.text else "Google News"
+    source = source_node.text.strip() if source_node is not None and source_node.text else fallback_source
     raw_date = (item.findtext("pubDate") or "").strip()
 
     published_at = raw_date
@@ -106,51 +113,66 @@ def _format_article(item: ET.Element) -> dict:
     }
 
 
+def _fetch_rss_items(url: str, source_name: str, limit: int):
+    request = Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; DarkIntel/1.0)"},
+    )
+    with urlopen(request, timeout=12) as response:
+        payload = response.read()
+    root = ET.fromstring(payload)
+    channel = root.find("channel")
+    items = channel.findall("item") if channel is not None else []
+    return [_format_article(item, source_name) for item in items[:limit]]
+
+
 def fetch_live_intel(query: str, limit: int = 6) -> dict:
     """
-    Fetch recent public internet coverage for a domain/email using Google News RSS.
-    This is public web intelligence, not dark web access.
+    Fetch recent public internet coverage for a domain/email using RSS news sources.
+    Falls back across providers to keep the feature resilient in production.
     """
     if not query or len(query.strip()) < 2:
         return {"status": "error", "message": "Query must be at least 2 characters."}
 
     cleaned = query.strip()
     target = _extract_domain(cleaned)
-    rss_query = quote_plus(f'"{target}" cybersecurity OR breach OR leak OR "data exposure"')
-    url = f"https://news.google.com/rss/search?q={rss_query}&hl=en-IN&gl=IN&ceid=IN:en"
-    request = Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; DarkIntel/1.0)"},
-    )
+    encoded = quote_plus(f'"{target}" cybersecurity OR breach OR leak OR "data exposure"')
 
-    try:
-        with urlopen(request, timeout=10) as response:
-            payload = response.read()
-    except Exception as exc:
+    sources = [
+        (
+            f"https://news.google.com/rss/search?q={encoded}&hl=en-IN&gl=IN&ceid=IN:en",
+            "Google News",
+        ),
+        (
+            f"https://www.bing.com/news/search?q={encoded}&format=rss",
+            "Bing News",
+        ),
+    ]
+
+    errors = []
+    results = []
+    provider = ""
+
+    for url, source_name in sources:
+        try:
+            results = _fetch_rss_items(url, source_name, limit)
+            if results:
+                provider = source_name
+                break
+            errors.append(f"{source_name}: no results")
+        except Exception as exc:
+            errors.append(f"{source_name}: {exc}")
+
+    if not results:
         return {
             "status": "error",
-            "message": f"Live internet lookup failed: {exc}",
+            "message": "Live internet lookup failed across all providers.",
             "query": target,
             "results": [],
             "count": 0,
             "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "details": errors,
         }
-
-    try:
-        root = ET.fromstring(payload)
-    except ET.ParseError:
-        return {
-            "status": "error",
-            "message": "Could not parse live intelligence feed.",
-            "query": target,
-            "results": [],
-            "count": 0,
-            "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        }
-
-    channel = root.find("channel")
-    items = channel.findall("item") if channel is not None else []
-    results = [_format_article(item) for item in items[:limit]]
 
     return {
         "status": "ok",
@@ -158,7 +180,7 @@ def fetch_live_intel(query: str, limit: int = 6) -> dict:
         "results": results,
         "count": len(results),
         "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "disclaimer": "Live public internet results from Google News RSS.",
+        "disclaimer": f"Live public internet results from {provider} RSS.",
     }
 
 

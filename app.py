@@ -1,13 +1,9 @@
 import base64
 import json
 import os
-import secrets
-from datetime import datetime, timedelta, timezone
-from functools import wraps
 from pathlib import Path
 
-from flask import Flask, g, jsonify, render_template, request, send_from_directory
-from werkzeug.security import check_password_hash, generate_password_hash
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
 from database import get_connection, init_db
 from modules.alert_system import create_alert, generate_pdf_report, get_alert_stats, get_all_alerts
@@ -26,7 +22,6 @@ from modules.risk_engine import assess_email_risk, calculate_risk_score, get_all
 
 BASE_DIR = Path(__file__).resolve().parent
 PUBLIC_DIR = BASE_DIR / "public"
-SESSION_TTL_DAYS = 14
 
 app = Flask(__name__)
 
@@ -39,131 +34,85 @@ def serve_frontend():
 
 def bootstrap_runtime():
     init_db()
-
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) AS total FROM breaches")
     has_breaches = (cursor.fetchone()["total"] or 0) > 0
     conn.close()
-
     if not has_breaches:
         ingest_breach_data()
 
 
-def serialize_user(row):
-    return {
-        "id": row["id"],
-        "full_name": row["full_name"],
-        "email": row["email"],
-        "company": row["company"],
-        "plan_name": row["plan_name"],
-        "created_at": row["created_at"],
-        "last_login_at": row["last_login_at"],
-    }
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
 
 
-def get_bearer_token():
-    header = request.headers.get("Authorization", "")
-    if not header.startswith("Bearer "):
-        return None
-    return header.split(" ", 1)[1].strip()
-
-
-def get_current_user():
-    token = get_bearer_token()
-    if not token:
-        return None
-
+def upsert_tracked_email(email: str, risk_label: str = "", score: int = 0, summary: str = ""):
+    email = normalize_email(email)
+    domain = email.split("@", 1)[1]
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT u.*, s.expires_at
-        FROM user_sessions s
-        JOIN users u ON u.id = s.user_id
-        WHERE s.token = ? AND u.is_active = 1
-        """,
-        (token,),
-    )
-    user = cursor.fetchone()
-    conn.close()
-
-    if not user:
-        return None
-
-    try:
-        expires_at = datetime.fromisoformat(user["expires_at"])
-    except ValueError:
-        return None
-
-    if expires_at <= datetime.now(timezone.utc):
-        return None
-    return user
-
-
-def auth_required(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        user = get_current_user()
-        if not user:
-            return jsonify({"error": "Authentication required."}), 401
-        g.current_user = user
-        return fn(*args, **kwargs)
-
-    return wrapper
-
-
-def create_session(user_id):
-    token = secrets.token_urlsafe(32)
-    expires_at = (datetime.now(timezone.utc) + timedelta(days=SESSION_TTL_DAYS)).isoformat()
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO user_sessions (user_id, token, expires_at) VALUES (?, ?, ?)",
-        (user_id, token, expires_at),
-    )
+    cursor.execute("SELECT id, lookup_count, report_count FROM tracked_emails WHERE email = ?", (email,))
+    existing = cursor.fetchone()
+    if existing:
+        cursor.execute(
+            """
+            UPDATE tracked_emails
+            SET domain = ?, last_risk_label = ?, last_score = ?, last_summary = ?, last_checked_at = datetime('now')
+            WHERE email = ?
+            """,
+            (domain, risk_label, score, summary, email),
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO tracked_emails (email, domain, last_risk_label, last_score, last_summary)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (email, domain, risk_label, score, summary),
+        )
     conn.commit()
     conn.close()
-    return token
 
 
-def maybe_get_authenticated_user():
-    user = get_current_user()
-    if user:
-        g.current_user = user
-    return user
+def increment_email_counter(email: str, field: str):
+    email = normalize_email(email)
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"UPDATE tracked_emails SET {field} = {field} + 1, last_checked_at = datetime('now') WHERE email = ?", (email,))
+    conn.commit()
+    conn.close()
 
 
-def save_lookup_history(user_id, query_value, payload):
+def save_lookup_history(email: str, query_value: str, payload: dict):
+    email = normalize_email(email)
+    upsert_tracked_email(email)
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
         """
-        INSERT INTO lookup_history (user_id, query_value, source, result_count, payload_json)
+        INSERT INTO email_lookup_history (tracked_email, query_value, source, result_count, payload_json)
         VALUES (?, ?, 'internet', ?, ?)
         """,
-        (
-            user_id,
-            query_value,
-            int(payload.get("count", 0)),
-            json.dumps(payload),
-        ),
+        (email, query_value, int(payload.get("count", 0)), json.dumps(payload)),
     )
     conn.commit()
     conn.close()
+    increment_email_counter(email, "lookup_count")
 
 
-def save_report(user_id, email, assessment_payload):
+def save_report(email: str, assessment_payload: dict):
+    email = normalize_email(email)
+    risk = assessment_payload["risk_assessment"]
+    upsert_tracked_email(email, risk.get("risk_label", "Low"), int(risk.get("total_score", 0)), risk.get("summary", ""))
     conn = get_connection()
     cursor = conn.cursor()
-    risk = assessment_payload["risk_assessment"]
     cursor.execute(
         """
-        INSERT INTO saved_reports (user_id, target_email, risk_label, score, summary, payload_json)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO email_reports (tracked_email, risk_label, score, summary, payload_json)
+        VALUES (?, ?, ?, ?, ?)
         """,
         (
-            user_id,
             email,
             risk.get("risk_label", "Low"),
             int(risk.get("total_score", 0)),
@@ -173,6 +122,7 @@ def save_report(user_id, email, assessment_payload):
     )
     conn.commit()
     conn.close()
+    increment_email_counter(email, "report_count")
 
 
 bootstrap_runtime()
@@ -190,88 +140,6 @@ def flask_index():
     return render_template("dashboard.html")
 
 
-@app.route("/api/auth/register", methods=["POST"])
-def auth_register():
-    data = request.get_json() or {}
-    full_name = data.get("full_name", "").strip()
-    email = data.get("email", "").strip().lower()
-    password = data.get("password", "")
-    company = data.get("company", "").strip()
-
-    if len(full_name) < 2:
-        return jsonify({"error": "Full name must be at least 2 characters."}), 400
-    if "@" not in email:
-        return jsonify({"error": "A valid email is required."}), 400
-    if len(password) < 8:
-        return jsonify({"error": "Password must be at least 8 characters."}), 400
-
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
-    if cursor.fetchone():
-        conn.close()
-        return jsonify({"error": "Email is already registered."}), 409
-
-    cursor.execute(
-        """
-        INSERT INTO users (full_name, email, password_hash, company)
-        VALUES (?, ?, ?, ?)
-        """,
-        (full_name, email, generate_password_hash(password), company),
-    )
-    user_id = cursor.lastrowid
-    conn.commit()
-    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    conn.close()
-
-    token = create_session(user_id)
-    return jsonify({"token": token, "user": serialize_user(user)}), 201
-
-
-@app.route("/api/auth/login", methods=["POST"])
-def auth_login():
-    data = request.get_json() or {}
-    email = data.get("email", "").strip().lower()
-    password = data.get("password", "")
-
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = ? AND is_active = 1", (email,))
-    user = cursor.fetchone()
-    if not user or not check_password_hash(user["password_hash"], password):
-        conn.close()
-        return jsonify({"error": "Invalid email or password."}), 401
-
-    now_iso = datetime.now(timezone.utc).isoformat()
-    cursor.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (now_iso, user["id"]))
-    conn.commit()
-    cursor.execute("SELECT * FROM users WHERE id = ?", (user["id"],))
-    user = cursor.fetchone()
-    conn.close()
-
-    token = create_session(user["id"])
-    return jsonify({"token": token, "user": serialize_user(user)}), 200
-
-
-@app.route("/api/auth/me")
-@auth_required
-def auth_me():
-    return jsonify(serialize_user(g.current_user))
-
-
-@app.route("/api/auth/logout", methods=["POST"])
-@auth_required
-def auth_logout():
-    token = get_bearer_token()
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM user_sessions WHERE token = ?", (token,))
-    conn.commit()
-    conn.close()
-    return jsonify({"status": "ok"})
-
-
 @app.route("/api/ingest")
 def trigger_ingestion():
     return jsonify(ingest_breach_data())
@@ -285,6 +153,70 @@ def api_breaches():
 @app.route("/api/stats")
 def api_stats():
     return jsonify(get_breach_stats())
+
+
+@app.route("/api/tracked-emails")
+def api_tracked_emails():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT email, domain, last_risk_label, last_score, last_summary, last_checked_at, lookup_count, report_count
+        FROM tracked_emails
+        ORDER BY last_checked_at DESC
+        LIMIT 25
+        """
+    )
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return jsonify({"items": rows})
+
+
+@app.route("/api/email-records")
+def api_email_records():
+    email = normalize_email(request.args.get("email", ""))
+    if not email or "@" not in email:
+        return jsonify({"error": "A valid email is required."}), 400
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT id, query_value, source, result_count, payload_json, created_at
+        FROM email_lookup_history
+        WHERE tracked_email = ?
+        ORDER BY created_at DESC
+        LIMIT 20
+        """,
+        (email,),
+    )
+    history = []
+    for row in cursor.fetchall():
+        payload = json.loads(row["payload_json"])
+        history.append(
+            {
+                "id": row["id"],
+                "query_value": row["query_value"],
+                "source": row["source"],
+                "result_count": row["result_count"],
+                "created_at": row["created_at"],
+                "top_results": payload.get("results", [])[:3],
+            }
+        )
+
+    cursor.execute(
+        """
+        SELECT id, risk_label, score, summary, created_at
+        FROM email_reports
+        WHERE tracked_email = ?
+        ORDER BY created_at DESC
+        LIMIT 20
+        """,
+        (email,),
+    )
+    reports = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return jsonify({"history": history, "reports": reports})
 
 
 @app.route("/search")
@@ -334,10 +266,13 @@ def api_darkweb_stats():
 def api_live_intel():
     data = request.get_json() or {}
     query = data.get("query", "").strip()
+    context_email = normalize_email(data.get("context_email", "").strip())
     payload = fetch_live_intel(query)
-    user = maybe_get_authenticated_user()
-    if user and payload.get("status") == "ok":
-        save_lookup_history(user["id"], payload.get("query", query), payload)
+    if payload.get("status") == "error":
+        status_code = 400 if "at least 2 characters" in payload.get("message", "") else 502
+        return jsonify(payload), status_code
+    if context_email and "@" in context_email and payload.get("status") == "ok":
+        save_lookup_history(context_email, payload.get("query", query), payload)
     return jsonify(payload)
 
 
@@ -359,134 +294,6 @@ def api_all_leaks():
 @app.route("/api/darkweb/tor-info")
 def api_tor_info():
     return jsonify(explain_tor_architecture())
-
-
-@app.route("/api/user/watchlist", methods=["GET"])
-@auth_required
-def get_watchlist():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT * FROM watchlist_items
-        WHERE user_id = ?
-        ORDER BY updated_at DESC, created_at DESC
-        """,
-        (g.current_user["id"],),
-    )
-    items = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return jsonify({"items": items})
-
-
-@app.route("/api/user/watchlist", methods=["POST"])
-@auth_required
-def add_watchlist_item():
-    data = request.get_json() or {}
-    query_value = data.get("query_value", "").strip()
-    query_type = data.get("query_type", "domain").strip() or "domain"
-    notes = data.get("notes", "").strip()
-
-    if len(query_value) < 2:
-        return jsonify({"error": "Watchlist value must be at least 2 characters."}), 400
-
-    live = fetch_live_intel(query_value, limit=3)
-    severity = ""
-    if live.get("results"):
-        severities = [item.get("severity", "Low") for item in live["results"]]
-        severity = "High" if "High" in severities else "Medium" if "Medium" in severities else "Low"
-
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO watchlist_items (user_id, query_type, query_value, latest_status, latest_severity, notes)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            g.current_user["id"],
-            query_type,
-            query_value,
-            live.get("status", ""),
-            severity,
-            notes,
-        ),
-    )
-    item_id = cursor.lastrowid
-    conn.commit()
-    cursor.execute("SELECT * FROM watchlist_items WHERE id = ?", (item_id,))
-    item = dict(cursor.fetchone())
-    conn.close()
-    return jsonify(item), 201
-
-
-@app.route("/api/user/watchlist/<int:item_id>", methods=["DELETE"])
-@auth_required
-def delete_watchlist_item(item_id):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "DELETE FROM watchlist_items WHERE id = ? AND user_id = ?",
-        (item_id, g.current_user["id"]),
-    )
-    conn.commit()
-    deleted = cursor.rowcount
-    conn.close()
-    if not deleted:
-        return jsonify({"error": "Watchlist item not found."}), 404
-    return jsonify({"status": "ok"})
-
-
-@app.route("/api/user/history")
-@auth_required
-def get_user_history():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT id, query_value, source, result_count, payload_json, created_at
-        FROM lookup_history
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-        LIMIT 25
-        """,
-        (g.current_user["id"],),
-    )
-    rows = []
-    for row in cursor.fetchall():
-        payload = json.loads(row["payload_json"])
-        rows.append(
-            {
-                "id": row["id"],
-                "query_value": row["query_value"],
-                "source": row["source"],
-                "result_count": row["result_count"],
-                "created_at": row["created_at"],
-                "top_results": payload.get("results", [])[:3],
-            }
-        )
-    conn.close()
-    return jsonify({"items": rows})
-
-
-@app.route("/api/user/reports")
-@auth_required
-def get_saved_reports():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT id, target_email, risk_label, score, summary, created_at
-        FROM saved_reports
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-        LIMIT 25
-        """,
-        (g.current_user["id"],),
-    )
-    rows = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return jsonify({"items": rows})
 
 
 @app.route("/assess")
@@ -555,7 +362,6 @@ def api_generate_report():
         breach_result = check_email(email)
         dark_web_result = scan_dark_web_for_email(email)
         assessment = assess_email_risk(breach_result, dark_web_result)
-
         combined = {
             "email_checked": breach_result.get("email_checked", ""),
             "breach_result": breach_result,
@@ -571,10 +377,7 @@ def api_generate_report():
 
         pdf_report = generate_pdf_report(combined)
         pdf_base64 = base64.b64encode(pdf_report["content"]).decode("ascii")
-
-        user = maybe_get_authenticated_user()
-        if user:
-            save_report(user["id"], email, combined)
+        save_report(email, combined)
 
         return jsonify(
             {

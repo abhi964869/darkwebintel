@@ -98,85 +98,51 @@ def init_db():
 
     cursor.execute(
         """
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE IF NOT EXISTS tracked_emails (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            email            TEXT NOT NULL UNIQUE,
+            domain           TEXT NOT NULL,
+            last_risk_label  TEXT DEFAULT '',
+            last_score       INTEGER DEFAULT 0,
+            last_summary     TEXT DEFAULT '',
+            last_checked_at  TEXT DEFAULT (datetime('now')),
+            lookup_count     INTEGER DEFAULT 0,
+            report_count     INTEGER DEFAULT 0
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_lookup_history (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            full_name     TEXT NOT NULL,
-            email         TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            company       TEXT DEFAULT '',
-            plan_name     TEXT DEFAULT 'Premium',
-            is_active     INTEGER DEFAULT 1,
-            created_at    TEXT DEFAULT (datetime('now')),
-            last_login_at TEXT
+            tracked_email TEXT NOT NULL,
+            query_value   TEXT NOT NULL,
+            source        TEXT NOT NULL DEFAULT 'internet',
+            result_count  INTEGER DEFAULT 0,
+            payload_json  TEXT NOT NULL,
+            created_at    TEXT DEFAULT (datetime('now'))
         )
         """
     )
 
     cursor.execute(
         """
-        CREATE TABLE IF NOT EXISTS user_sessions (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id     INTEGER NOT NULL,
-            token       TEXT NOT NULL UNIQUE,
-            created_at  TEXT DEFAULT (datetime('now')),
-            expires_at  TEXT NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-        """
-    )
-
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS watchlist_items (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id         INTEGER NOT NULL,
-            query_type      TEXT NOT NULL DEFAULT 'domain',
-            query_value     TEXT NOT NULL,
-            latest_status   TEXT DEFAULT '',
-            latest_severity TEXT DEFAULT '',
-            notes           TEXT DEFAULT '',
-            created_at      TEXT DEFAULT (datetime('now')),
-            updated_at      TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-        """
-    )
-
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS lookup_history (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id      INTEGER NOT NULL,
-            query_value  TEXT NOT NULL,
-            source       TEXT NOT NULL DEFAULT 'internet',
-            result_count INTEGER DEFAULT 0,
-            payload_json TEXT NOT NULL,
-            created_at   TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-        """
-    )
-
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS saved_reports (
+        CREATE TABLE IF NOT EXISTS email_reports (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id       INTEGER NOT NULL,
-            target_email  TEXT NOT NULL,
+            tracked_email TEXT NOT NULL,
             risk_label    TEXT NOT NULL,
             score         INTEGER NOT NULL,
             summary       TEXT DEFAULT '',
             payload_json  TEXT NOT NULL,
-            created_at    TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            created_at    TEXT DEFAULT (datetime('now'))
         )
         """
     )
 
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist_items(user_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_lookup_history_user ON lookup_history(user_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_saved_reports_user ON saved_reports(user_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(token)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tracked_emails_email ON tracked_emails(email)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_email_lookup_history_email ON email_lookup_history(tracked_email)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_email_reports_email ON email_reports(tracked_email)")
 
     conn.commit()
     conn.close()
